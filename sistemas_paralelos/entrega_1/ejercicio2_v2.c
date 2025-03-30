@@ -90,6 +90,9 @@ int main(int argc, char *argv[])
     double promA = 0;
     double promB = 0;
 
+    // Auxiliares para calcular los indices
+    int posA, posB, posAxB, posC, posBT, posCxBT;
+
     // Calculamos maximos, minimos, y promedio de A y B
     for (i = 0; i < NxN; i++)
     {
@@ -137,7 +140,6 @@ int main(int argc, char *argv[])
     }
 
     // A x B (Multiplicacion por bloques)
-
     for (i = 0; i < N; i += BLOCK_SIZE)
     {
         for (j = 0; j < N; j += BLOCK_SIZE)
@@ -151,7 +153,10 @@ int main(int argc, char *argv[])
                     {
                         for (kk = 0; kk < BLOCK_SIZE; kk++)
                         {
-                            AxB[i * N + j] += A[i * N + k] * B[j * N + k];
+                            posAxB = (i + ii) * N + (j + jj);
+                            posA = (i + ii) * N + (k + kk);
+                            posB = (k + kk) * N + (j + jj);
+                            AxB[posAxB] += A[posA] * B[posB];
                         }
                     }
                 }
@@ -178,6 +183,7 @@ int main(int argc, char *argv[])
     }
 
     // C x B Transpuesta (Multiplicacion por Bloques)
+
     for (i = 0; i < N; i += BLOCK_SIZE)
     {
         for (j = 0; j < N; j += BLOCK_SIZE)
@@ -191,7 +197,10 @@ int main(int argc, char *argv[])
                     {
                         for (kk = 0; kk < BLOCK_SIZE; kk++)
                         {
-                            CxBT[i * N + j] += C[i * N + k] * BT[j * N + k];
+                            posCxBT = (i + ii) * N + (j + jj);
+                            posC = (i + ii) * N + (k + kk);
+                            posBT = (k + kk) * N + (j + jj);
+                            CxBT[posCxBT] += C[posC] * BT[posBT];
                         }
                     }
                 }
