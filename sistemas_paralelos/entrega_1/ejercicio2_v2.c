@@ -83,10 +83,10 @@ int main(int argc, char *argv[])
     // Comienza el calculo
     double timetick = dwalltime();
 
-    double maxA = -1;
-    double maxB = -1;
-    double minA = 99999;
-    double minB = 99999;
+    double maxA = A[0]; 
+    double maxB = B[0];
+    double minA = A[0];
+    double minB = B[0];
     double promA = 0;
     double promB = 0;
 
@@ -122,7 +122,7 @@ int main(int argc, char *argv[])
 
     promB = promB / NxN;
 
-    double escalar = maxA * maxB - minA * minB;
+    double escalar = (maxA * maxB - minA * minB) / (promA * promB);
 
     if (imprimir > 0)
     {
@@ -200,26 +200,12 @@ int main(int argc, char *argv[])
     }
 
     printMatrix(CxBT, N, 1, "C x B Transversa");
-    // ===========================
-    for (i = 0; i < N; i += BLOCK_SIZE)
+   
+    //AxB(x escalar) + CxBT
+    //Ambas matrices estan almacenadas por fila
+    for (i = 0; i < NxN; i++)
     {
-        for (j = 0; j < N; j += BLOCK_SIZE)
-        {
-            for (k = 0; k < N; k += BLOCK_SIZE)
-            {
-
-                for (ii = 0; ii < BLOCK_SIZE; ii++)
-                {
-                    for (jj = 0; jj < BLOCK_SIZE; jj++)
-                    {
-                        for (kk = 0; kk < BLOCK_SIZE; kk++)
-                        {
-                            R[i * N + j] += AxB[i * N + k] * CxBT[j * N + k];
-                        }
-                    }
-                }
-            }
-        }
+        R[i] = AxB[i] + CxBT[i];
     }
 
     double elapsed = dwalltime() - timetick;
