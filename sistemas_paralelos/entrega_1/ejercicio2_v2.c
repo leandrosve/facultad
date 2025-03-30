@@ -1,11 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#define ORDENXFILAS 0
-#define ORDENXCOLUMNAS 1
 
 // Dimension por defecto de las matrices
-int N = 1000;
-
+int N = 100;
+int BLOCK_SIZE = 10;
 int imprimir = 0;
 
 // Para calcular tiempo
@@ -39,9 +37,15 @@ int main(int argc, char *argv[])
 {
 
     // Recibimos parametro con la dimension de la matriz
-    if ((argc != 2) || ((N = atoi(argv[1])) <= 0))
+    if ((argc != 3) || ((N = atoi(argv[1])) <= 0) || ((BLOCK_SIZE = atoi(argv[2])) <= 0))
     {
-        printf("\nUsar: %s n\n  n: Dimension de la matriz (nxn X nxn)\n", argv[0]);
+        printf("\nUsar: %s N  BLOCK_SIZE\n", argv[0]);
+        exit(1);
+    }
+
+    if (((N % BLOCK_SIZE) != 0))
+    {
+        printf("\nError: N debe ser multiplo de BLOCK_SIZE \n");
         exit(1);
     }
 
@@ -59,7 +63,7 @@ int main(int argc, char *argv[])
     BT = (double *)malloc(sizeof(double) * N * N);
     CxBT = (double *)malloc(sizeof(double) * N * N);
 
-    int i, j, k;
+    int i, j, k, ii, jj, kk;
 
     // Inicializa las matrices A y B en 1
     for (i = 0; i < NxN; i++)
@@ -67,8 +71,12 @@ int main(int argc, char *argv[])
         A[i] = 1;
         B[i] = 1;
         C[i] = 1;
+        AxB[i] = 0;
+        CxBT[i] = 0;
+        R[i] = 0;
     }
 
+  
     printMatrix(A, N, 1, "Matriz A");
     printMatrix(B, N, 0, "Matriz B");
 
@@ -128,22 +136,32 @@ int main(int argc, char *argv[])
         printf("===================================\n");
     }
 
-    // A x B (x el escalar)
-    for (i = 0; i < N; i++)
+    // A x B (Multiplicacion por bloques)
+
+    for (i = 0; i < N; i += BLOCK_SIZE)
     {
-        for (j = 0; j < N; j++)
+        for (j = 0; j < N; j += BLOCK_SIZE)
         {
-            int acc = 0;
-            for (k = 0; k < N; k++)
+            for (k = 0; k < N; k += BLOCK_SIZE)
             {
-                acc += A[i * N + k] * B[j * N + k];
+
+                for (ii = 0; ii < BLOCK_SIZE; ii++)
+                {
+                    for (jj = 0; jj < BLOCK_SIZE; jj++)
+                    {
+                        for (kk = 0; kk < BLOCK_SIZE; kk++)
+                        {
+                            AxB[i * N + j] += A[i * N + k] * B[j * N + k];
+                        }
+                    }
+                }
             }
-            AxB[i * N + j] = acc;
         }
     }
 
     // Multiplicamos AxB por el escalar calculado anteriormente
-    for (i = 0; i < NxN; i++) {
+    for (i = 0; i < NxN; i++)
+    {
         AxB[i] = AxB[i] * escalar;
     }
 
@@ -159,33 +177,48 @@ int main(int argc, char *argv[])
         }
     }
 
-    // C * B transpuesta
-    for (i = 0; i < N; i++)
+    // C x B Transpuesta (Multiplicacion por Bloques)
+    for (i = 0; i < N; i += BLOCK_SIZE)
     {
-        for (j = 0; j < N; j++)
+        for (j = 0; j < N; j += BLOCK_SIZE)
         {
-            int acc = 0;
-            for (k = 0; k < N; k++)
+            for (k = 0; k < N; k += BLOCK_SIZE)
             {
-                acc += C[i * N + k] * BT[j * N + k];
+
+                for (ii = 0; ii < BLOCK_SIZE; ii++)
+                {
+                    for (jj = 0; jj < BLOCK_SIZE; jj++)
+                    {
+                        for (kk = 0; kk < BLOCK_SIZE; kk++)
+                        {
+                            CxBT[i * N + j] += C[i * N + k] * BT[j * N + k];
+                        }
+                    }
+                }
             }
-            CxBT[i * N + j] = acc;
         }
     }
 
     printMatrix(CxBT, N, 1, "C x B Transversa");
-
-    // Multiplicacion final
-    for (i = 0; i < N; i++)
+    // ===========================
+    for (i = 0; i < N; i += BLOCK_SIZE)
     {
-        for (j = 0; j < N; j++)
+        for (j = 0; j < N; j += BLOCK_SIZE)
         {
-            int acc = 0;
-            for (k = 0; k < N; k++)
+            for (k = 0; k < N; k += BLOCK_SIZE)
             {
-                acc += AxB[i * N + k] * CxBT[k * N + j];
+
+                for (ii = 0; ii < BLOCK_SIZE; ii++)
+                {
+                    for (jj = 0; jj < BLOCK_SIZE; jj++)
+                    {
+                        for (kk = 0; kk < BLOCK_SIZE; kk++)
+                        {
+                            R[i * N + j] += AxB[i * N + k] * CxBT[j * N + k];
+                        }
+                    }
+                }
             }
-            R[i * N + j] = acc;
         }
     }
 
