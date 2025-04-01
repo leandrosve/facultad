@@ -1,7 +1,7 @@
 trap "echo 'Terminando ejecución...'; pkill -P $$; exit 1" SIGINT
 # Compilar ambos programas
-gcc -o ./compilados/ejercicio2_v1_optimo ejercicio2_v1_optimo.c
-gcc -o ./compilados/ejercicio2_v2_optimo ejercicio2_v2_optimo.c
+gcc -o ./compilados/ejercicio2_v1_optimo ejercicio2_v1_optimo.c -O3
+gcc -o ./compilados/ejercicio2_v2_optimo ejercicio2_v2_optimo.c -O3
 
 # Valores de N
 N_VALUES=(512 1024 2048 4096)
