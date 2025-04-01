@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #define ORDENXFILAS 0
 #define ORDENXCOLUMNAS 1
 
+// Version sin impresiones
 // Dimension por defecto de las matrices
 int N = 1000;
-
-int imprimir = 0;
 
 // Para calcular tiempo
 double dwalltime()
@@ -19,22 +19,6 @@ double dwalltime()
     return sec;
 }
 
-void printMatrix(double *matrix, int N, int byRow, const char *title)
-{
-    if (imprimir <= 0)
-        return;
-    printf("%s\n", title);
-    for (int i = 0; i < N; i++)
-    {
-        for (int j = 0; j < N; j++)
-        {
-            int index = byRow ? (i * N + j) : (j * N + i);
-            printf("%f ", matrix[index]);
-        }
-        printf("\n");
-    }
-}
-
 int main(int argc, char *argv[])
 {
 
@@ -44,6 +28,8 @@ int main(int argc, char *argv[])
         printf("\nUsar: %s n\n  n: Dimension de la matriz (nxn X nxn)\n", argv[0]);
         exit(1);
     }
+
+    printf("\nAlgoritmo v1 - Ejecución con n = %d \n", N);
 
     int NxN = N * N;
 
@@ -69,13 +55,10 @@ int main(int argc, char *argv[])
         C[i] = 1;
     }
 
-    printMatrix(A, N, 1, "Matriz A");
-    printMatrix(B, N, 0, "Matriz B");
-
     // Comienza el calculo
     double timetick = dwalltime();
 
-    double maxA = A[0]; 
+    double maxA = A[0];
     double maxB = B[0];
     double minA = A[0];
     double minB = B[0];
@@ -86,8 +69,14 @@ int main(int argc, char *argv[])
     for (i = 0; i < NxN; i++)
     {
         double aux = A[i];
-        if (aux > maxA){ maxA = aux; }
-        if (aux < minA){ minA = aux; }
+        if (aux > maxA)
+        {
+            maxA = aux;
+        }
+        if (aux < minA)
+        {
+            minA = aux;
+        }
         promA += aux;
     }
     promA = promA / NxN;
@@ -95,26 +84,20 @@ int main(int argc, char *argv[])
     for (i = 0; i < NxN; i++)
     {
         double aux = B[i];
-        if (aux > maxB) { maxB = aux; }
-        if (aux < minB) { minB = aux; }
+        if (aux > maxB)
+        {
+            maxB = aux;
+        }
+        if (aux < minB)
+        {
+            minB = aux;
+        }
         promB += aux;
     }
 
     promB = promB / NxN;
 
     double escalar = (maxA * maxB - minA * minB) / (promA * promB);
-
-    if (imprimir > 0)
-    {
-
-        printf("===================================\n");
-        printf("promA: %f \n", promA);
-        printf("promB: %f \n", promB);
-        printf("minA: %f \n", minA);
-        printf("minB: %f \n", minB);
-        printf("escalar: %f \n", escalar);
-        printf("===================================\n");
-    }
 
     // A x B
     for (i = 0; i < N; i++)
@@ -131,11 +114,10 @@ int main(int argc, char *argv[])
     }
 
     // Multiplicamos AxB por el escalar calculado anteriormente
-    for (i = 0; i < NxN; i++) {
+    for (i = 0; i < NxN; i++)
+    {
         AxB[i] = AxB[i] * escalar;
     }
-
-    printMatrix(AxB, N, 1, "A x B x Escalar");
 
     // Armamos B transpuesta
 
@@ -161,17 +143,14 @@ int main(int argc, char *argv[])
         }
     }
 
-    printMatrix(CxBT, N, 1, "C x B Transversa");
-
-    //AxB(x escalar) + CxBT
-    //Ambas matrices estan almacenadas por fila
+    // AxB(x escalar) + CxBT
+    // Ambas matrices estan almacenadas por fila
     for (i = 0; i < NxN; i++)
     {
         R[i] = AxB[i] + CxBT[i];
     }
 
     double elapsed = dwalltime() - timetick;
-    printMatrix(R, N, 1, "RESULTADO");
 
     printf("\nTiempo en segundos %f\n", elapsed);
 }
