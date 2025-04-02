@@ -1,0 +1,129 @@
+Resultados de ejecución
+
+Algoritmo v1 - Ejecución con n = 512 
+
+Tiempo en segundos 0.115043
+
+Algoritmo v1 - Ejecución con n = 1024 
+
+Tiempo en segundos 0.913871
+
+Algoritmo v1 - Ejecución con n = 2048 
+
+Tiempo en segundos 9.113333
+
+Algoritmo v1 - Ejecución con n = 4096 
+
+Tiempo en segundos 74.948950
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 8
+
+Tiempo en segundos 0.102734
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 16
+
+Tiempo en segundos 0.100710
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 32
+
+Tiempo en segundos 0.084484
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 64
+
+Tiempo en segundos 0.096600
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 128
+
+Tiempo en segundos 0.117201
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 256
+
+Tiempo en segundos 0.120365
+
+Algoritmo v2 - Ejecución con N = 512 y BLOCK_SIZE = 512
+
+Tiempo en segundos 0.117183
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 8
+
+Tiempo en segundos 0.805182
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 16
+
+Tiempo en segundos 0.793864
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 32
+
+Tiempo en segundos 0.732677
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 64
+
+Tiempo en segundos 0.685621
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 128
+
+Tiempo en segundos 0.891238
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 256
+
+Tiempo en segundos 0.942603
+
+Algoritmo v2 - Ejecución con N = 1024 y BLOCK_SIZE = 512
+
+Tiempo en segundos 0.947742
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 8
+
+Tiempo en segundos 6.650549
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 16
+
+Tiempo en segundos 6.261147
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 32
+
+Tiempo en segundos 5.758200
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 64
+
+Tiempo en segundos 5.499913
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 128
+
+Tiempo en segundos 7.142659
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 256
+
+Tiempo en segundos 7.359547
+
+Algoritmo v2 - Ejecución con N = 2048 y BLOCK_SIZE = 512
+
+Tiempo en segundos 7.548103
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 8
+
+Tiempo en segundos 54.556972
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 16
+
+Tiempo en segundos 50.784916
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 32
+
+Tiempo en segundos 50.116057
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 64
+
+Tiempo en segundos 43.800579
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 128
+
+Tiempo en segundos 56.587990
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 256
+
+Tiempo en segundos 58.936661
+
+Algoritmo v2 - Ejecución con N = 4096 y BLOCK_SIZE = 512
+
+Tiempo en segundos 60.803345
