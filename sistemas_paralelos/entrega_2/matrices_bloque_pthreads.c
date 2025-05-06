@@ -17,12 +17,11 @@ pthread_mutex_t promB_lock;
 
 pthread_mutex_t count_axb_lock;
 pthread_mutex_t count_bt_lock;
-pthread_mutex_t count_cxbt_lock;
+
+pthread_barrier_t barrier;
 
 sem_t bt_sem;
-sem_t cxbt_sem;
 sem_t axb_sem;
-sem_t escalar_sem;
 
 /* Multiplicacion de matrices por bloque*/
 void blkmul(double *ablk, double *bblk, double *cblk, int n, int bs)
@@ -73,7 +72,6 @@ double escalar = 0.0;
 
 double count_escalar = 0;
 double count_bt = 0;
-double count_cxbt = 0;
 double count_axb = 0;
 
 // Cantidad de hilos
@@ -163,11 +161,10 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&promA_lock, NULL);
     pthread_mutex_init(&promB_lock, NULL);
     pthread_mutex_init(&count_bt_lock, NULL);
-    pthread_mutex_init(&count_cxbt_lock, NULL);
     pthread_mutex_init(&count_axb_lock, NULL);
+    pthread_barrier_init(&barrier, NULL, T);
 
     sem_init(&bt_sem, 0, 0);
-    sem_init(&cxbt_sem, 0, 0);
     sem_init(&axb_sem, 0, 0);
 
     pthread_attr_init(&attr);
@@ -220,9 +217,10 @@ void *thread_process(void *ptr)
 
     for (i = start2; i <= end2; i++)
     {
+        int ixn = i * N;
         for (j = 0; j < N; j++)
         {
-            BT[j * N + i] = B[i * N + j];
+            BT[j * N + i] = B[ixn + j];
         }
     }
 
@@ -313,10 +311,10 @@ void *thread_process(void *ptr)
 
         escalar = (maxA * maxB - minA * minB) / (promA * promB);
 
-        // printf("Resultados:\n");
-        // printf("minA: %f  maxA: %f  promA: %f \n", minA, maxA, promA);
-        // printf("minB: %f  maxB: %f  promB: %f \n", minB, maxB, promB);
-        // printf("Escalar %f \n", escalar);
+        printf("Resultados:\n");
+        printf("minA: %f  maxA: %f  promA: %f \n", minA, maxA, promA);
+        printf("minB: %f  maxB: %f  promB: %f \n", minB, maxB, promB);
+        printf("Escalar %f \n", escalar);
     }
     pthread_mutex_unlock(&promB_lock);
 
@@ -371,18 +369,6 @@ void *thread_process(void *ptr)
         }
     }
 
-    // Aviso que termine c x btranspuesta, si soy el ultimo le sumo T al semaforo
-    pthread_mutex_lock(&count_cxbt_lock);
-    count_cxbt++;
-    if (count_cxbt == T)
-    {
-        for (i = 0; i < T; i++)
-        {
-            sem_post(&cxbt_sem);
-        }
-    }
-    pthread_mutex_unlock(&count_cxbt_lock);
-
     // ======= Parte 5: Multiplicar AxB por el escalar =======
 
     // Garantizar que AxB (y el escalar) esta calculado
@@ -395,8 +381,8 @@ void *thread_process(void *ptr)
 
     // ======= Parte 5: Multiplicar AxB(x escalar) x CxBT =======
 
-    // Garantizar que CxBT esta calculada
-    sem_wait(&cxbt_sem);
+    // Garantizar que todos llegaron hasta aqui
+    pthread_barrier_wait(&barrier);
 
     for (i = inferior; i <= superior; i++)
     {
