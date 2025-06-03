@@ -2,9 +2,20 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include "mpi.h"
 
 #define COORDINADOR 0
+
+double dwalltime()
+{
+  double sec;
+  struct timeval tv;
+
+  gettimeofday(&tv, NULL);
+  sec = tv.tv_sec + tv.tv_usec / 1000000.0;
+  return sec;
+}
 
 /* Multiplicacion de matrices por bloque*/
 void blkmul(double *ablk, double *bblk, double *cblk, int n, int bs)
@@ -25,19 +36,15 @@ void blkmul(double *ablk, double *bblk, double *cblk, int n, int bs)
 
 int main(int argc, char *argv[])
 {
-
-    
     int RANGO;
     int CANT_PROCESOS;
-    
-    double startTime, endTime;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &CANT_PROCESOS);
     MPI_Comm_rank(MPI_COMM_WORLD, &RANGO);
     MPI_Status status;
 
-    int N, NxN, ROWS_PER_PROCESS, ELEMENTS_PER_PROCESS, BLOCK_SIZE;
+    int N, BLOCK_SIZE;
 
      // Controlar los argumentos del programa
 
@@ -64,7 +71,12 @@ int main(int argc, char *argv[])
         printf("\nLa cantidad de procesos debe ser consistente con la cantidad total de bloques\n");
         exit(1);
     }
-        
+
+    if (RANGO == COORDINADOR)
+    {
+        printf("===============================================\n");
+        printf("N = %d  CANT_PROCESOS = %d  BLOCK_SIZE = %d\n\n", N, CANT_PROCESOS, BLOCK_SIZE);
+    }
 
     // Matrices enteras y strips
     double *A, *B, *BT, *C, *R;
@@ -76,11 +88,11 @@ int main(int argc, char *argv[])
     // Minimos y maximos locales
     double minALocal, maxALocal, minBLocal, maxBLocal, totalALocal, totalBLocal;
 
-    NxN = N * N;
-    ROWS_PER_PROCESS = N / CANT_PROCESOS;
-    ELEMENTS_PER_PROCESS = ROWS_PER_PROCESS * N;
+    int NxN = N * N;
+    int ROWS_PER_PROCESS = N / CANT_PROCESOS;
+    int ELEMENTS_PER_PROCESS = ROWS_PER_PROCESS * N;
 
-    int i, j, k;
+    int i, j, k, ixn, jxn;
 
 
     // Para iterar sobre los strips
@@ -98,6 +110,12 @@ int main(int argc, char *argv[])
     stripC = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
     stripCxBT = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
     stripR = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
+
+    // Para medir tiempos de comunicacion
+	double commTimes[6], maxCommTimes[6], minCommTimes[6], commTime, totalTime;
+
+    // Variable auxiliar para acceder a los elementos de las matrices
+    double aux;
 
     // Si soy el coordinador
     if (RANGO == COORDINADOR)
@@ -126,10 +144,7 @@ int main(int argc, char *argv[])
     // Hacemos un barrier para garantizar que los procesos se iniciaron correctamente y estan listos para comenzar
     MPI_Barrier(MPI_COMM_WORLD);
     
-    if (RANGO == COORDINADOR) {
-        startTime = MPI_Wtime();
-    }
-
+    commTimes[0] = MPI_Wtime();
 
     // Distribuir las filas de la matriz A
     MPI_Scatter(A, ELEMENTS_PER_PROCESS, MPI_DOUBLE, stripA, ELEMENTS_PER_PROCESS, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
@@ -140,6 +155,7 @@ int main(int argc, char *argv[])
     // Distribuir las filas de la matriz C
     MPI_Scatter(C, ROWS_PER_PROCESS * N, MPI_DOUBLE, stripC, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
+    commTimes[1] = MPI_Wtime();
 
     // ======= Parte 1: Calculo del escalar ========
     minALocal = stripA[0];
@@ -151,7 +167,7 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < ELEMENTS_PER_PROCESS; i++)
     {
-        double aux = stripA[i];
+        aux = stripA[i];
         if (aux > maxALocal)
         {
             maxALocal = aux;
@@ -165,7 +181,7 @@ int main(int argc, char *argv[])
 
     for (i = inferior; i <= superior; i++)
     {
-        double aux = B[i];
+        aux = B[i];
 
         if (aux > maxBLocal)
         {
@@ -190,9 +206,13 @@ int main(int argc, char *argv[])
     double globalMax[2];
     double globalTotal[2];
 
+    commTimes[2] = MPI_Wtime();
+
     MPI_Allreduce(localMin, globalMin, 2, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     MPI_Allreduce(localMax, globalMax, 2, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(localTotal, globalTotal, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+    commTimes[3] = MPI_Wtime();
 
     minA = globalMin[0];
     minB = globalMin[1];
@@ -222,11 +242,11 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
     {
-        int ixn = i * N;
+        ixn = i * N;
 
         for (j = 0; j < N; j += BLOCK_SIZE)
         {
-            int jxn = j * N;
+            jxn = j * N;
             for (k = 0; k < N; k += BLOCK_SIZE)
             {
                 blkmul(&stripA[ixn + k], &B[jxn + k], &stripAxB[ixn + j], N, BLOCK_SIZE);
@@ -241,21 +261,13 @@ int main(int argc, char *argv[])
         stripAxB[i] = stripAxB[i] * escalar;
     }
 
-    for (i = 0; i < N; i++)
-    {
-        for (j = 0; j < N; j++)
-        {
-            BT[j * N + i] = B[i * N + j];
-        }
-    }
-
     // ======= Parte 5: Multiplicar C x BT =======
     for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
     {
-        int ixn = i * N;
+        ixn = i * N;
         for (j = 0; j < N; j += BLOCK_SIZE)
         {
-            int jxn = j * N;
+            jxn = j * N;
             for (k = 0; k < N; k += BLOCK_SIZE)
             {
                 blkmul(&stripC[ixn + k], &BT[jxn + k], &stripCxBT[ixn + j], N, BLOCK_SIZE);
@@ -269,19 +281,24 @@ int main(int argc, char *argv[])
         stripR[i] = stripAxB[i] + stripCxBT[i];
     }
 
+    commTimes[4] = MPI_Wtime();
+
     MPI_Gather(stripR, ROWS_PER_PROCESS * N, MPI_DOUBLE, R, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
-    if (RANGO == COORDINADOR) {
+    commTimes[5] = MPI_Wtime();
     
-        endTime = MPI_Wtime();
+	MPI_Reduce(commTimes, minCommTimes, 6, MPI_DOUBLE, MPI_MIN, COORDINADOR, MPI_COMM_WORLD);
+	MPI_Reduce(commTimes, maxCommTimes, 6, MPI_DOUBLE, MPI_MAX, COORDINADOR, MPI_COMM_WORLD);
 
-        double resolution = MPI_Wtick();
-        printf("Tiempo transcurrido: %f\n", (endTime - startTime));
-        printf("Tiempo total: %f\n", resolution);
-
-    }
     if (RANGO == COORDINADOR)
     {
+
+        totalTime = maxCommTimes[5] - minCommTimes[0];
+		commTime = (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]) ;		
+
+		printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n",totalTime,commTime);
+
+        // Calculamos el promedio para corroborar el resultado
         double promedio = 0;
         for (i = 0; i < NxN; i++)
         {
