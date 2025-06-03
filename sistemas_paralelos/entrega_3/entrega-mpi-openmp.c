@@ -2,10 +2,21 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include "mpi.h"
 #include <omp.h>
 
 #define COORDINADOR 0
+
+double dwalltime()
+{
+    double sec;
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+    sec = tv.tv_sec + tv.tv_usec / 1000000.0;
+    return sec;
+}
 
 /* Multiplicacion de matrices por bloque*/
 void blkmul(double *ablk, double *bblk, double *cblk, int n, int bs)
@@ -30,16 +41,12 @@ int main(int argc, char *argv[])
     int RANGO;
     int CANT_PROCESOS;
 
-    int CANT_THREADS;
-
-    double startTime, endTime;
-
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &CANT_PROCESOS);
     MPI_Comm_rank(MPI_COMM_WORLD, &RANGO);
     MPI_Status status;
 
-    int N, NxN, ROWS_PER_PROCESS, ELEMENTS_PER_PROCESS, BLOCK_SIZE;
+    int N, BLOCK_SIZE, CANT_THREADS;
 
     // Controlar los argumentos del programa
 
@@ -73,6 +80,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    if (RANGO == COORDINADOR)
+    {
+        printf("==============================================================\n");
+        printf("N = %d  CANT_PROCESOS = %d CANT_HILOS = %d  BLOCK_SIZE = %d\n\n", N, CANT_PROCESOS, CANT_THREADS, BLOCK_SIZE);
+    }
+
     // OpenMP
     omp_set_num_threads(CANT_THREADS);
 
@@ -86,11 +99,12 @@ int main(int argc, char *argv[])
     // Minimos y maximos locales
     double minALocal, maxALocal, minBLocal, maxBLocal, totalALocal, totalBLocal;
 
-    NxN = N * N;
-    ROWS_PER_PROCESS = N / CANT_PROCESOS;
-    ELEMENTS_PER_PROCESS = ROWS_PER_PROCESS * N;
+    int NxN = N * N;
+    int ROWS_PER_PROCESS = N / CANT_PROCESOS;
+    int ELEMENTS_PER_PROCESS = ROWS_PER_PROCESS * N;
 
-    int i, j, k;
+    // Iteradores
+    int i, j, k, ixn, jxn;
 
     // Para iterar sobre los strips
     int inferior = RANGO * ELEMENTS_PER_PROCESS;
@@ -107,6 +121,12 @@ int main(int argc, char *argv[])
     stripC = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
     stripCxBT = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
     stripR = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
+
+    // Para medir tiempos de comunicacion
+    double commTimes[6], maxCommTimes[6], minCommTimes[6], commTime, totalTime;
+
+    // Variable auxiliar para acceder a los elementos de las matrices
+    double aux;
 
     // Si soy el coordinador
     if (RANGO == COORDINADOR)
@@ -132,13 +152,10 @@ int main(int argc, char *argv[])
         stripCxBT[i] = 0;
     }
 
-    // Hacemos un barrier para garantizar que los procesos se iniciaron correctamente y estan listos para comenzar
+    // Hacemos un barrier para garantizar que los procesos llegaron hasta este punto y estan listos para comenzar
     MPI_Barrier(MPI_COMM_WORLD);
 
-    if (RANGO == COORDINADOR)
-    {
-        startTime = MPI_Wtime();
-    }
+    commTimes[0] = MPI_Wtime();
 
     // Distribuir las filas de la matriz A
     MPI_Scatter(A, ELEMENTS_PER_PROCESS, MPI_DOUBLE, stripA, ELEMENTS_PER_PROCESS, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
@@ -149,148 +166,155 @@ int main(int argc, char *argv[])
     // Distribuir las filas de la matriz C
     MPI_Scatter(C, ROWS_PER_PROCESS * N, MPI_DOUBLE, stripC, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
+    commTimes[1] = MPI_Wtime();
+
     // ======= Parte 1: Calculo del escalar ========
     minALocal = stripA[0];
     maxALocal = minALocal;
     minBLocal = B[inferior];
     maxBLocal = minBLocal;
-    totalALocal = 0;
     totalBLocal = 0;
 
-    #pragma omp parallel {
-
-    #pragma for private(i) reduction(min : minALocal) reduction(max : maxALocal) reduction(+ : totalALocal)
-    for (i = 0; i < ELEMENTS_PER_PROCESS; i++)
+// Inicia bloque paralelo
+#pragma omp parallel shared(BLOCK_SIZE, N, NxN, stripA, stripC, stripR, stripCxBT, BT, B, ELEMENTS_PER_PROCESS)
     {
-        double aux = stripA[i];
 
-        if (aux < minALocal)
-            minALocal = aux;
-        if (aux > maxA)
-            maxALocal = aux;
+        // printf("Proceso: %d - Hilo: %d\n", RANGO, omp_get_thread_num());
 
-        totalALocal += aux;
-    }
-    }
-
-
-    for (i = inferior; i <= superior; i++)
-    {
-        double aux = B[i];
-
-        if (aux > maxBLocal)
+#pragma omp for nowait private(i, aux) reduction(min : minALocal) reduction(max : maxALocal) reduction(+ : totalALocal) schedule(static)
+        for (i = 0; i < ELEMENTS_PER_PROCESS; i++)
         {
-            maxBLocal = aux;
+            aux = stripA[i];
+
+            if (aux < minALocal)
+                minALocal = aux;
+            if (aux > maxALocal)
+                maxALocal = aux;
+
+            totalALocal += aux;
         }
-        if (aux < minBLocal)
+
+#pragma omp for private(i, aux) reduction(min : minBLocal) reduction(max : maxBLocal) reduction(+ : totalBLocal) schedule(static)
+        for (i = inferior; i <= superior; i++)
         {
-            minBLocal = aux;
-        }
-        totalBLocal += aux;
-    }
+            aux = B[i];
 
-    // printf("Proceso %d - maxALocal: %f - minALocal: %f - totalALocal: %f \n", rango, maxALocal, minALocal, totalALocal);
-
-    // Agrupamos los maximos, minimos y totales en arreglos, para disminuir la cantidad de comunicaciones
-    double localMin[2] = {minALocal, minBLocal};
-    double localMax[2] = {maxALocal, maxBLocal};
-    double localTotal[2] = {totalALocal, totalBLocal};
-
-    double globalMin[2];
-    double globalMax[2];
-    double globalTotal[2];
-
-    MPI_Allreduce(localMin, globalMin, 2, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-    MPI_Allreduce(localMax, globalMax, 2, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    MPI_Allreduce(localTotal, globalTotal, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-    minA = globalMin[0];
-    minB = globalMin[1];
-    maxA = globalMax[0];
-    maxB = globalMax[1];
-    promA = globalTotal[0] / NxN;
-    promB = globalTotal[1] / NxN;
-
-    escalar = (maxA * maxB - minA * minB) / (promA * promB);
-
-    /*  printf("Proceso %d - maxA: %f - minA: %f - promA: %f \n", RANGO, maxA, minA, promA);
-        printf("Proceso %d - maxB: %f - minB: %f - promB: %f \n", RANGO, maxB, minB, promB);
-        printf("Proceso %d - escalar: %f \n", RANGO, escalar);*/
-
-    // ======= Parte 2: Armar B transpuesta ========
-
-    for (i = 0; i < N; i++)
-    {
-        for (j = 0; j < N; j++)
-        {
-            BT[j * N + i] = B[i * N + j];
-        }
-    }
-
-    // ======= Parte 3: Multiplicar A x B =======
-
-    for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
-    {
-        int ixn = i * N;
-
-        for (j = 0; j < N; j += BLOCK_SIZE)
-        {
-            int jxn = j * N;
-            for (k = 0; k < N; k += BLOCK_SIZE)
+            if (aux > maxBLocal)
             {
-                blkmul(&stripA[ixn + k], &B[jxn + k], &stripAxB[ixn + j], N, BLOCK_SIZE);
+                maxBLocal = aux;
+            }
+            if (aux < minBLocal)
+            {
+                minBLocal = aux;
+            }
+            totalBLocal += aux;
+        }
+
+        // Solo uno debe hacer esto
+#pragma omp single
+        {
+            // Agrupamos los maximos, minimos y totales en arreglos, para disminuir la cantidad de comunicaciones
+            // Aprovechando que Allreduce soporta arreglos
+            double localMin[2] = {minALocal, minBLocal};
+            double localMax[2] = {maxALocal, maxBLocal};
+            double localTotal[2] = {totalALocal, totalBLocal};
+
+            double globalMin[2];
+            double globalMax[2];
+            double globalTotal[2];
+
+            commTimes[2] = MPI_Wtime();
+
+            MPI_Allreduce(localMin, globalMin, 2, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+            MPI_Allreduce(localMax, globalMax, 2, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+            MPI_Allreduce(localTotal, globalTotal, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+            commTimes[3] = MPI_Wtime();
+
+            minA = globalMin[0];
+            minB = globalMin[1];
+            maxA = globalMax[0];
+            maxB = globalMax[1];
+            promA = globalTotal[0] / NxN;
+            promB = globalTotal[1] / NxN;
+
+            escalar = (maxA * maxB - minA * minB) / (promA * promB);
+        }
+
+        // ======= Parte 2: Armar B transpuesta ========
+
+#pragma omp for nowait private(i, j) schedule(static)
+        for (i = 0; i < N; i++)
+        {
+            for (j = 0; j < N; j++)
+            {
+                BT[j * N + i] = B[i * N + j];
             }
         }
-    }
 
-    // ======= Parte 4: Multiplicar AxB por el escalar ========
-
-    for (i = 0; i < ROWS_PER_PROCESS * N; i++)
-    {
-        stripAxB[i] = stripAxB[i] * escalar;
-    }
-
-    for (i = 0; i < N; i++)
-    {
-        for (j = 0; j < N; j++)
+#pragma omp for private(i, j, k, ixn, jxn) schedule(static)
+        for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
         {
-            BT[j * N + i] = B[i * N + j];
-        }
-    }
+            ixn = i * N;
 
-    // ======= Parte 5: Multiplicar C x BT =======
-    for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
-    {
-        int ixn = i * N;
-        for (j = 0; j < N; j += BLOCK_SIZE)
-        {
-            int jxn = j * N;
-            for (k = 0; k < N; k += BLOCK_SIZE)
+            for (j = 0; j < N; j += BLOCK_SIZE)
             {
-                blkmul(&stripC[ixn + k], &BT[jxn + k], &stripCxBT[ixn + j], N, BLOCK_SIZE);
+                jxn = j * N;
+                for (k = 0; k < N; k += BLOCK_SIZE)
+                {
+                    blkmul(&stripA[ixn + k], &B[jxn + k], &stripAxB[ixn + j], N, BLOCK_SIZE);
+                }
             }
         }
+
+// ======= Parte 4: Multiplicar AxB por el escalar ========
+#pragma omp for private(i) schedule(static)
+        for (i = 0; i < ROWS_PER_PROCESS * N; i++)
+        {
+            stripAxB[i] = stripAxB[i] * escalar;
+        }
+
+        // ======= Parte 5: Multiplicar C x BT =======
+
+#pragma omp for private(i, j, k, ixn, jxn) schedule(static)
+        for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
+        {
+            ixn = i * N;
+            for (j = 0; j < N; j += BLOCK_SIZE)
+            {
+                jxn = j * N;
+                for (k = 0; k < N; k += BLOCK_SIZE)
+                {
+                    blkmul(&stripC[ixn + k], &BT[jxn + k], &stripCxBT[ixn + j], N, BLOCK_SIZE);
+                }
+            }
+        }
+
+// ======= Parte 6: Multiplicar AxB(x escalar) x CxBT =======
+#pragma omp for private(i) schedule(static)
+        for (i = 0; i <= ELEMENTS_PER_PROCESS; i++)
+        {
+            stripR[i] = stripAxB[i] + stripCxBT[i];
+        }
     }
 
-    // ======= Parte 6: Multiplicar AxB(x escalar) x CxBT =======
-    for (i = 0; i <= ROWS_PER_PROCESS * N; i++)
-    {
-        stripR[i] = stripAxB[i] + stripCxBT[i];
-    }
+    commTimes[4] = MPI_Wtime();
 
     MPI_Gather(stripR, ROWS_PER_PROCESS * N, MPI_DOUBLE, R, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
+    commTimes[5] = MPI_Wtime();
+
+    MPI_Reduce(commTimes, minCommTimes, 6, MPI_DOUBLE, MPI_MIN, COORDINADOR, MPI_COMM_WORLD);
+    MPI_Reduce(commTimes, maxCommTimes, 6, MPI_DOUBLE, MPI_MAX, COORDINADOR, MPI_COMM_WORLD);
+
     if (RANGO == COORDINADOR)
     {
 
-        endTime = MPI_Wtime();
+        totalTime = maxCommTimes[5] - minCommTimes[0];
+        commTime = (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]);
 
-        double resolution = MPI_Wtick();
-        printf("Tiempo transcurrido: %f\n", (endTime - startTime));
-        printf("Tiempo total: %f\n", resolution);
-    }
-    if (RANGO == COORDINADOR)
-    {
+        printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n", totalTime, commTime);
+   
         double promedio = 0;
         for (i = 0; i < NxN; i++)
         {
