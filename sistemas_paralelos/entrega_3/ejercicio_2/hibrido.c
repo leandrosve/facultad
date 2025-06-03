@@ -68,12 +68,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if ((N / BLOCK_SIZE % CANT_PROCESOS) != 0)
-    {
-        printf("\nLa cantidad de procesos debe ser consistente con la cantidad total de bloques\n");
-        exit(1);
-    }
-
     if (((N / CANT_PROCESOS) % CANT_THREADS) != 0)
     {
         printf("\nLa cantidad de hilos debe ser consistente con el tamaño de los strips\n");
@@ -84,6 +78,14 @@ int main(int argc, char *argv[])
     {
         printf("==============================================================\n");
         printf("N = %d  CANT_PROCESOS = %d CANT_HILOS = %d  BLOCK_SIZE = %d\n\n", N, CANT_PROCESOS, CANT_THREADS, BLOCK_SIZE);
+    }
+
+    if (N / (CANT_PROCESOS * CANT_THREADS) < BLOCK_SIZE) {
+        BLOCK_SIZE =  N / (CANT_PROCESOS * CANT_THREADS);
+
+        if (RANGO == COORDINADOR) {
+            printf("El tamaño de bloque se cambio a %d para evitar inconsistencias\n", BLOCK_SIZE);
+        }
     }
 
     // OpenMP
@@ -175,13 +177,13 @@ int main(int argc, char *argv[])
     maxBLocal = minBLocal;
     totalBLocal = 0;
 
-// Inicia bloque paralelo
-#pragma omp parallel shared(BLOCK_SIZE, N, NxN, stripA, stripC, stripR, stripCxBT, BT, B, ELEMENTS_PER_PROCESS)
+    // Inicia bloque paralelo
+    #pragma omp parallel shared(BLOCK_SIZE, N, NxN, stripA, stripC, stripR, stripCxBT, BT, B, ELEMENTS_PER_PROCESS)
     {
 
         // printf("Proceso: %d - Hilo: %d\n", RANGO, omp_get_thread_num());
 
-#pragma omp for nowait private(i, aux) reduction(min : minALocal) reduction(max : maxALocal) reduction(+ : totalALocal) schedule(static)
+        #pragma omp for nowait private(i, aux) reduction(min : minALocal) reduction(max : maxALocal) reduction(+ : totalALocal) schedule(static)
         for (i = 0; i < ELEMENTS_PER_PROCESS; i++)
         {
             aux = stripA[i];
@@ -194,7 +196,7 @@ int main(int argc, char *argv[])
             totalALocal += aux;
         }
 
-#pragma omp for private(i, aux) reduction(min : minBLocal) reduction(max : maxBLocal) reduction(+ : totalBLocal) schedule(static)
+        #pragma omp for private(i, aux) reduction(min : minBLocal) reduction(max : maxBLocal) reduction(+ : totalBLocal) schedule(static)
         for (i = inferior; i <= superior; i++)
         {
             aux = B[i];
@@ -211,7 +213,7 @@ int main(int argc, char *argv[])
         }
 
         // Solo uno debe hacer esto
-#pragma omp single
+        #pragma omp single
         {
             // Agrupamos los maximos, minimos y totales en arreglos, para disminuir la cantidad de comunicaciones
             // Aprovechando que Allreduce soporta arreglos
@@ -243,7 +245,7 @@ int main(int argc, char *argv[])
 
         // ======= Parte 2: Armar B transpuesta ========
 
-#pragma omp for nowait private(i, j) schedule(static)
+        #pragma omp for nowait private(i, j) schedule(static)
         for (i = 0; i < N; i++)
         {
             for (j = 0; j < N; j++)
@@ -252,7 +254,7 @@ int main(int argc, char *argv[])
             }
         }
 
-#pragma omp for private(i, j, k, ixn, jxn) schedule(static)
+        #pragma omp for private(i, j, k, ixn, jxn) schedule(static)
         for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
         {
             ixn = i * N;
@@ -267,8 +269,8 @@ int main(int argc, char *argv[])
             }
         }
 
-// ======= Parte 4: Multiplicar AxB por el escalar ========
-#pragma omp for private(i) schedule(static)
+        // ======= Parte 4: Multiplicar AxB por el escalar ========
+        #pragma omp for private(i) schedule(static)
         for (i = 0; i < ROWS_PER_PROCESS * N; i++)
         {
             stripAxB[i] = stripAxB[i] * escalar;
@@ -276,7 +278,7 @@ int main(int argc, char *argv[])
 
         // ======= Parte 5: Multiplicar C x BT =======
 
-#pragma omp for private(i, j, k, ixn, jxn) schedule(static)
+        #pragma omp for private(i, j, k, ixn, jxn) schedule(static)
         for (i = 0; i < ROWS_PER_PROCESS; i += BLOCK_SIZE)
         {
             ixn = i * N;
@@ -290,8 +292,8 @@ int main(int argc, char *argv[])
             }
         }
 
-// ======= Parte 6: Multiplicar AxB(x escalar) x CxBT =======
-#pragma omp for private(i) schedule(static)
+        // ======= Parte 6: Multiplicar AxB(x escalar) x CxBT =======
+        #pragma omp for private(i) schedule(static)
         for (i = 0; i <= ELEMENTS_PER_PROCESS; i++)
         {
             stripR[i] = stripAxB[i] + stripCxBT[i];
@@ -314,7 +316,7 @@ int main(int argc, char *argv[])
         commTime = (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]);
 
         printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n", totalTime, commTime);
-   
+
         double promedio = 0;
         for (i = 0; i < NxN; i++)
         {

@@ -9,12 +9,12 @@
 
 double dwalltime()
 {
-  double sec;
-  struct timeval tv;
+    double sec;
+    struct timeval tv;
 
-  gettimeofday(&tv, NULL);
-  sec = tv.tv_sec + tv.tv_usec / 1000000.0;
-  return sec;
+    gettimeofday(&tv, NULL);
+    sec = tv.tv_sec + tv.tv_usec / 1000000.0;
+    return sec;
 }
 
 /* Multiplicacion de matrices por bloque*/
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 
     int N, BLOCK_SIZE;
 
-     // Controlar los argumentos del programa
+    // Controlar los argumentos del programa
 
     if ((argc != 3) || ((N = atoi(argv[1])) <= 0) || ((BLOCK_SIZE = atoi(argv[2])) <= 0))
     {
@@ -66,16 +66,18 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if ((N / BLOCK_SIZE % CANT_PROCESOS) != 0)
-    {
-        printf("\nLa cantidad de procesos debe ser consistente con la cantidad total de bloques\n");
-        exit(1);
-    }
-
     if (RANGO == COORDINADOR)
     {
         printf("===============================================\n");
         printf("N = %d  CANT_PROCESOS = %d  BLOCK_SIZE = %d\n\n", N, CANT_PROCESOS, BLOCK_SIZE);
+    }
+
+    if (N / (CANT_PROCESOS) < BLOCK_SIZE) {
+        BLOCK_SIZE =  N / (CANT_PROCESOS);
+
+        if (RANGO == COORDINADOR) {
+            printf("El tamaño de bloque se cambio a %d para evitar inconsistencias\n", BLOCK_SIZE);
+        }
     }
 
     // Matrices enteras y strips
@@ -94,7 +96,6 @@ int main(int argc, char *argv[])
 
     int i, j, k, ixn, jxn;
 
-
     // Para iterar sobre los strips
     int inferior = RANGO * ELEMENTS_PER_PROCESS;
     int superior = inferior + ELEMENTS_PER_PROCESS - 1;
@@ -112,7 +113,7 @@ int main(int argc, char *argv[])
     stripR = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
 
     // Para medir tiempos de comunicacion
-	double commTimes[6], maxCommTimes[6], minCommTimes[6], commTime, totalTime;
+    double commTimes[6], maxCommTimes[6], minCommTimes[6], commTime, totalTime;
 
     // Variable auxiliar para acceder a los elementos de las matrices
     double aux;
@@ -143,7 +144,7 @@ int main(int argc, char *argv[])
 
     // Hacemos un barrier para garantizar que los procesos se iniciaron correctamente y estan listos para comenzar
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
     commTimes[0] = MPI_Wtime();
 
     // Distribuir las filas de la matriz A
@@ -196,7 +197,6 @@ int main(int argc, char *argv[])
 
     // printf("Proceso %d - maxALocal: %f - minALocal: %f - totalALocal: %f \n", rango, maxALocal, minALocal, totalALocal);
 
-
     // Agrupamos los maximos, minimos y totales en arreglos, para disminuir la cantidad de comunicaciones
     double localMin[2] = {minALocal, minBLocal};
     double localMax[2] = {maxALocal, maxBLocal};
@@ -227,7 +227,6 @@ int main(int argc, char *argv[])
         printf("Proceso %d - maxB: %f - minB: %f - promB: %f \n", RANGO, maxB, minB, promB);
         printf("Proceso %d - escalar: %f \n", RANGO, escalar);*/
 
-
     // ======= Parte 2: Armar B transpuesta ========
 
     for (i = 0; i < N; i++)
@@ -254,7 +253,7 @@ int main(int argc, char *argv[])
         }
     }
 
-       // ======= Parte 4: Multiplicar AxB por el escalar ========
+    // ======= Parte 4: Multiplicar AxB por el escalar ========
 
     for (i = 0; i < ROWS_PER_PROCESS * N; i++)
     {
@@ -286,17 +285,17 @@ int main(int argc, char *argv[])
     MPI_Gather(stripR, ROWS_PER_PROCESS * N, MPI_DOUBLE, R, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
     commTimes[5] = MPI_Wtime();
-    
-	MPI_Reduce(commTimes, minCommTimes, 6, MPI_DOUBLE, MPI_MIN, COORDINADOR, MPI_COMM_WORLD);
-	MPI_Reduce(commTimes, maxCommTimes, 6, MPI_DOUBLE, MPI_MAX, COORDINADOR, MPI_COMM_WORLD);
+
+    MPI_Reduce(commTimes, minCommTimes, 6, MPI_DOUBLE, MPI_MIN, COORDINADOR, MPI_COMM_WORLD);
+    MPI_Reduce(commTimes, maxCommTimes, 6, MPI_DOUBLE, MPI_MAX, COORDINADOR, MPI_COMM_WORLD);
 
     if (RANGO == COORDINADOR)
     {
 
         totalTime = maxCommTimes[5] - minCommTimes[0];
-		commTime = (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]) ;		
+        commTime = (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]);
 
-		printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n",totalTime,commTime);
+        printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n", totalTime, commTime);
 
         // Calculamos el promedio para corroborar el resultado
         double promedio = 0;
