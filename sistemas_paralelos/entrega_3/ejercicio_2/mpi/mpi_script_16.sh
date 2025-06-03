@@ -1,11 +1,12 @@
 #!/bin/bash
-#SBATCH -N 1
+#SBATCH -N 2
 #SBATCH --exclusive
-#SBATCH -o resultados/output_mpi.txt
-#SBATCH -e resultados/errors_mpi.txt 
+#SBATCH --tasks-per-node=8
+#SBATCH -o resultados/output_mpi_16.txt
+#SBATCH -e resultados/errors_mpi_16.txt 
 
 # Configuración de parámetros
-CANT_NODOS=1  # Tiene que ser igual al SBATCH -N
+CANT_NODOS=2  # Tiene que ser igual al SBATCH -N
 CANT_PROCESOS=$((CANT_NODOS * 8))  # 8 procesos por nodo
 
 MATRIX_SIZES=(512 1024 2048 4096)
@@ -21,15 +22,15 @@ echo "🔨 Compilando mpi.c..."
 mpicc mpi.c -o ./compilados/mpi -O3 || exit 1
 
 # Escribir encabezado
-echo -e "TAMAÑO | BLOQUE | NODOS | PROCESOS | TIEMPO (s) | COMM (s) | PROMEDIO\n--------------------------------------------------------------" > "$REPORTE_TABLA"
+echo -e "TAMAÑO | BLOQUE | NODOS | PROCESOS  | TIEMPO (s)  | COMM (s) | PROMEDIO\n------------------------------------------------------------------------------" > "$REPORTE_TABLA"
 
 # Ejecución de pruebas
 for N in "${MATRIX_SIZES[@]}"; do       
-    OUTPUT=$(mpirun --oversubscribe -np "$CANT_PROCESOS" ./compilados/mpi "$N" "$BLOCK_SIZE")
+    OUTPUT=$(mpirun ./compilados/mpi "$N" "$BLOCK_SIZE")
 
     TIME_TOTAL=$(echo "$OUTPUT" | grep "Tiempo total" | awk '{print $3}')
     TIME_COMM=$(echo "$OUTPUT" | grep "Tiempo comunicacion" | awk '{print $3}')
-    PROMEDIO=$(echo "$OUTPUT" | grep "Promedio" | awk '{print $3}')
+    PROMEDIO=$(echo "$OUTPUT" | grep "Promedio" | awk '{print $2}')
 
     # Imprimir resultados alineados
     printf "%-7s | %-6s | %-5s | %-8s | %-11s | %-9s | %-8s\n" \

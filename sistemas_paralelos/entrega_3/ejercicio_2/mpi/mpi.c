@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
         }
         promedio = promedio / NxN;
 
-        printf("\nPromedio %f\n", promedio);
+        printf("Promedio: %f\n", promedio);
     }
 
     MPI_Finalize();
