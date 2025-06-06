@@ -7,7 +7,7 @@
 
 # Configuración de parámetros
 CANT_NODOS=2  # Tiene que ser igual al SBATCH -N
-CANT_PROCESOS=$((CANT_NODOS * 1))  # 1 procesos por nodo
+CANT_PROCESOS=$((CANT_NODOS))  # 1 procesos por nodo
 CANT_THREADS=$((CANT_NODOS * 8))  # 8 procesos por nodo
 
 export OMP_NUM_THREADS=CANT_THREADS

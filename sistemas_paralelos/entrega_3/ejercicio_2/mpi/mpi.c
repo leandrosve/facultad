@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
     stripR = (double *)malloc(sizeof(double) * ELEMENTS_PER_PROCESS);
 
     // Para medir tiempos de comunicacion
-    double commTimes[6], maxCommTimes[6], minCommTimes[6], commTime, totalTime;
+    double commTimes[6], maxCommTimes[6], minCommTimes[6], commTime, totalTime, startTime, endTime;
 
     // Variable auxiliar para acceder a los elementos de las matrices
     double aux;
@@ -144,9 +144,12 @@ int main(int argc, char *argv[])
 
     // Hacemos un barrier para garantizar que los procesos se iniciaron correctamente y estan listos para comenzar
     MPI_Barrier(MPI_COMM_WORLD);
-
-    commTimes[0] = MPI_Wtime();
-
+    
+    if (RANGO == COORDINADOR) {
+        startTime = dwalltime();
+    }
+    commTimes[0] = dwalltime();
+    
     // Distribuir las filas de la matriz A
     MPI_Scatter(A, ELEMENTS_PER_PROCESS, MPI_DOUBLE, stripA, ELEMENTS_PER_PROCESS, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
@@ -156,7 +159,7 @@ int main(int argc, char *argv[])
     // Distribuir las filas de la matriz C
     MPI_Scatter(C, ROWS_PER_PROCESS * N, MPI_DOUBLE, stripC, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
-    commTimes[1] = MPI_Wtime();
+    commTimes[1] = dwalltime();
 
     // ======= Parte 1: Calculo del escalar ========
     minALocal = stripA[0];
@@ -206,13 +209,13 @@ int main(int argc, char *argv[])
     double globalMax[2];
     double globalTotal[2];
 
-    commTimes[2] = MPI_Wtime();
+    commTimes[2] = dwalltime();
 
     MPI_Allreduce(localMin, globalMin, 2, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
     MPI_Allreduce(localMax, globalMax, 2, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     MPI_Allreduce(localTotal, globalTotal, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    commTimes[3] = MPI_Wtime();
+    commTimes[3] = dwalltime();
 
     minA = globalMin[0];
     minB = globalMin[1];
@@ -280,22 +283,33 @@ int main(int argc, char *argv[])
         stripR[i] = stripAxB[i] + stripCxBT[i];
     }
 
-    commTimes[4] = MPI_Wtime();
+    commTimes[4] = dwalltime();
 
     MPI_Gather(stripR, ROWS_PER_PROCESS * N, MPI_DOUBLE, R, ROWS_PER_PROCESS * N, MPI_DOUBLE, COORDINADOR, MPI_COMM_WORLD);
 
-    commTimes[5] = MPI_Wtime();
+    commTimes[5] = dwalltime();
 
-    MPI_Reduce(commTimes, minCommTimes, 6, MPI_DOUBLE, MPI_MIN, COORDINADOR, MPI_COMM_WORLD);
-    MPI_Reduce(commTimes, maxCommTimes, 6, MPI_DOUBLE, MPI_MAX, COORDINADOR, MPI_COMM_WORLD);
+    if (RANGO == COORDINADOR) {
+        endTime = dwalltime();
+    }
 
+    double localCommTime = (commTimes[1] - commTimes[0]) + (commTimes[3] - commTimes[2]) + (commTimes[5] - commTimes[4]);
+
+    printf("Proceso %d - Tiempo local de comunicacion: %lf\n", RANGO, localCommTime);
+
+
+    double promCommTime;
+    MPI_Reduce(&localCommTime, &promCommTime, 1, MPI_DOUBLE, MPI_SUM, COORDINADOR, MPI_COMM_WORLD);
+    
     if (RANGO == COORDINADOR)
     {
-
-        totalTime = maxCommTimes[5] - minCommTimes[0];
-        commTime = (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]);
-
-        printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n", totalTime, commTime);
+        //Calcula el promedio a partir del total y la cantidad de procesos 
+        promCommTime = promCommTime / CANT_PROCESOS;        
+        
+        // Tiempo total de principio a final en el coordinador
+        totalTime = endTime - startTime;
+   
+        printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n", totalTime, promCommTime);
 
         // Calculamos el promedio para corroborar el resultado
         double promedio = 0;
