@@ -311,7 +311,7 @@ int main(int argc, char *argv[])
 
     commTimes[5] = dwalltime();
 
-        if (RANGO == COORDINADOR) {
+    if (RANGO == COORDINADOR) {
         endTime = dwalltime();
     }
 
@@ -321,8 +321,11 @@ int main(int argc, char *argv[])
     printf("Proceso %d - Tiempo local de comunicacion: %lf\n", RANGO, localCommTime);
 
     double promCommTime;
+    double maxCommTimes[6], minCommTimes[6];
+    MPI_Reduce(commTimes, minCommTimes, 6, MPI_DOUBLE, MPI_MIN, COORDINADOR, MPI_COMM_WORLD);
+	MPI_Reduce(commTimes, maxCommTimes, 6, MPI_DOUBLE, MPI_MAX, COORDINADOR, MPI_COMM_WORLD);
     MPI_Reduce(&localCommTime, &promCommTime, 1, MPI_DOUBLE, MPI_SUM, COORDINADOR, MPI_COMM_WORLD);
-    
+
     if (RANGO == COORDINADOR)
     {
         //Calcula el promedio a partir del total y la cantidad de procesos 
@@ -330,8 +333,9 @@ int main(int argc, char *argv[])
         
         // Tiempo total de principio a final en el coordinador
         totalTime = endTime - startTime;
-   
-        printf("Tiempo total: %lf\nTiempo comunicacion: %lf\n", totalTime, promCommTime);
+        double totalCommTime = maxCommTimes[5] - minCommTimes[0];;
+        double commTime =  (maxCommTimes[1] - minCommTimes[0]) + (maxCommTimes[3] - minCommTimes[2]) + (maxCommTimes[5] - minCommTimes[4]);	
+        printf("Tiempo total: %lf\nTiempo promedio comunicacion: %lf\nTiempo total comunicacion: %lf\nTiempo agregado comunicacion: %lf\n", totalTime, promCommTime, totalCommTime, commTime);
 
         // Calculamos el promedio para corroborar el resultado
         double promedio = 0;
@@ -343,6 +347,7 @@ int main(int argc, char *argv[])
 
         printf("Promedio: %f\n", promedio);
     }
+
 
     MPI_Finalize();
 }
